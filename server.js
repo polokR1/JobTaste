@@ -1,7 +1,5 @@
 import express from "express";
 import cors from "cors";
-// Jeśli masz Node.js 18+, możesz usunąć ten import! fetch jest wbudowany.
-// import fetch from "node-fetch";
 
 const app = express();
 app.use(cors());
