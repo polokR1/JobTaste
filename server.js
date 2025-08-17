@@ -11,13 +11,20 @@ if (!OPENAI_API_KEY) throw new Error("Brak OPENAI_API_KEY w zmiennych środowisk
 
 app.post("/ask", async (req, res) => {
   try {
-    const { prompt, files } = req.body;
+    const { prompt, files, images } = req.body;
     if (!prompt || !files) return res.status(400).json({ error: "Brak prompt lub files" });
 
     const filesList = Object.entries(files)
       .map(([name, content]) => `---\n${name}\n${content}`)
       .join("\n");
-    const userMessage = `Oto wszystkie pliki projektu webowego (HTML, CSS, JS):\n${filesList}\n\nInstrukcja: ${prompt}\n\nZwróć tylko zmodyfikowane pliki jako JSON w formacie {"nazwa_pliku": "nowa zawartość", ...}`;
+    const imagesList = images
+      ? Object.entries(images)
+          .map(([name, dataUrl]) => `---\n${name}\n${dataUrl.slice(0,40)}...`)
+          .join("\n")
+      : "";
+    const userMessage = `Oto pliki projektu webowego (HTML, CSS, JS):\n${filesList}\n` +
+                        (imagesList ? `Obrazki (dataURL):\n${imagesList}\n` : "") +
+                        `\nInstrukcja: ${prompt}\n\nZwróć tylko zmodyfikowane pliki jako JSON {"nazwa_pliku": "nowa zawartość", ...}`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -28,7 +35,7 @@ app.post("/ask", async (req, res) => {
       body: JSON.stringify({
         model: "gpt-4o",
         messages: [
-          { role: "system", content: "Jesteś asystentem pomagającym w modyfikacji projektów webowych (HTML, CSS, JS). Odpowiadaj JSON-em zawierającym tylko pliki, które się zmieniły." },
+          { role: "system", content: "Jesteś asystentem pomagającym w modyfikacji prostych projektów webowych (HTML, CSS, JS). Jeśli chcesz użyć obrazka, umieść go jako <img src=\"dataURL\"> lub <img src=\"nazwa.png\"> (jeśli istnieje). Odpowiadaj JSON-em zawierającym tylko pliki, które się zmieniły." },
           { role: "user", content: userMessage }
         ]
       })
