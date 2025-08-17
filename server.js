@@ -24,7 +24,7 @@ app.post("/ask", async (req, res) => {
       : "";
     const userMessage = `Oto pliki projektu webowego (HTML, CSS, JS):\n${filesList}\n` +
                         (imagesList ? `Obrazki (dataURL):\n${imagesList}\n` : "") +
-                        `\nInstrukcja: ${prompt}\n\nZwróć tylko zmodyfikowane pliki jako JSON {"nazwa_pliku": "nowa zawartość", ...}`;
+                        `\nInstrukcja: ${prompt}\n\nZwróć tylko zmodyfikowane pliki jako JSON {"nazwa_pliku": "nowa zawartość", ...} (bez komentarzy, bez opisu, bez tekstu przed/po).`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -35,15 +35,17 @@ app.post("/ask", async (req, res) => {
       body: JSON.stringify({
         model: "gpt-4o",
         messages: [
-          { role: "system", content: "Jesteś asystentem pomagającym w modyfikacji prostych projektów webowych (HTML, CSS, JS). Jeśli chcesz użyć obrazka, umieść go jako <img src=\"dataURL\"> lub <img src=\"nazwa.png\"> (jeśli istnieje). Odpowiadaj JSON-em zawierającym tylko pliki, które się zmieniły." },
+          { role: "system", content: "Jesteś asystentem pomagającym w modyfikacji prostych projektów webowych (HTML, CSS, JS). Jeśli chcesz użyć obrazka, umieść go jako <img src=\"dataURL\"> lub <img src=\"nazwa.png\"> (jeśli istnieje). Odpowiadaj TYLKO poprawnym JSON-em zawierającym tylko pliki, które się zmieniły. ŻADNYCH opisów, komentarzy, znaczników przed/po." },
           { role: "user", content: userMessage }
         ]
       })
     });
 
     const data = await response.json();
-    if (!response.ok) return res.status(response.status).json({ error: data });
+    console.log("OPENAI DATA:", data);
     const resultText = data.choices?.[0]?.message?.content || "";
+    console.log("Tekst od AI:", resultText);
+
     let filesResult = {};
     try {
       const jsonMatch = resultText.match(/```json\s*([\s\S]+?)```/) || resultText.match(/\{[\s\S]+\}/);
