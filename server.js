@@ -22,9 +22,14 @@ app.post("/ask", async (req, res) => {
           .map(([name, dataUrl]) => `---\n${name}\n${dataUrl.slice(0,40)}...`)
           .join("\n")
       : "";
+
+    // Nowy prompt systemowy – AI ma odpowiedzieć w polu "message" i dać JSON z plikami (lub pusty jeśli nic nie zmienia)
     const userMessage = `Oto pliki projektu webowego (HTML, CSS, JS):\n${filesList}\n` +
                         (imagesList ? `Obrazki (dataURL):\n${imagesList}\n` : "") +
-                        `\nInstrukcja: ${prompt}\n\nZwróć tylko zmodyfikowane pliki jako JSON {"nazwa_pliku": "nowa zawartość", ...} (bez komentarzy, bez opisu, bez tekstu przed/po).`;
+                        `\nInstrukcja: ${prompt}\n\n` +
+                        `ODPOWIEDZ UŻYTKOWNIKOWI w polu "message" (to czat!), a następnie zwróć tylko zmodyfikowane pliki jako {"files": {"nazwa_pliku": "nowa zawartość", ...}}. Jeśli nie zmieniasz żadnych plików, "files" ma być pustym obiektem. Format odpowiedzi:\n` +
+                        `{"message": "Twoja odpowiedź do użytkownika po polsku", "files": {"nazwa_pliku": "nowa zawartość"}}\n` +
+                        `Nie dodawaj żadnych komentarzy, nie używaj bloków kodu, zwróć tylko czysty JSON.`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -35,7 +40,7 @@ app.post("/ask", async (req, res) => {
       body: JSON.stringify({
         model: "gpt-4o",
         messages: [
-          { role: "system", content: "Jesteś asystentem pomagającym w modyfikacji prostych projektów webowych (HTML, CSS, JS). Jeśli chcesz użyć obrazka, umieść go jako <img src=\"dataURL\"> lub <img src=\"nazwa.png\"> (jeśli istnieje). Odpowiadaj TYLKO poprawnym JSON-em zawierającym tylko pliki, które się zmieniły. ŻADNYCH opisów, komentarzy, znaczników przed/po." },
+          { role: "system", content: `Jesteś asystentem pomagającym w modyfikacji prostych projektów webowych (HTML, CSS, JS). Najpierw ODPOWIEDZ użytkownikowi w polu "message" (czat) – wyjaśnij, co zrobiłeś, podsumuj zmiany lub odpowiedz na pytanie. Następnie zwróć tylko zmodyfikowane pliki jako {"files": {"nazwa_pliku": "nowa zawartość"}}. Jeśli nie zmieniasz plików, "files" musi być pustym obiektem. Nie dodawaj żadnych opisów poza polem "message", nie używaj bloków kodu ani komentarzy. Odpowiedź musi być pojedynczym czystym JSONem.` },
           { role: "user", content: userMessage }
         ]
       })
@@ -46,18 +51,19 @@ app.post("/ask", async (req, res) => {
     const resultText = data.choices?.[0]?.message?.content || "";
     console.log("Tekst od AI:", resultText);
 
-    let filesResult = {};
+    let resultObj = {};
     try {
-      const jsonMatch = resultText.match(/```json\s*([\s\S]+?)```/) || resultText.match(/\{[\s\S]+\}/);
+      // AI powinno dać czysty JSON: {"message": "...", "files": {...}}
+      const jsonMatch = resultText.match(/\{[\s\S]+\}/);
       if (jsonMatch) {
-        filesResult = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+        resultObj = JSON.parse(jsonMatch[0]);
       } else {
-        filesResult = JSON.parse(resultText);
+        resultObj = JSON.parse(resultText);
       }
     } catch (e) {
       return res.status(500).json({ error: "Błąd parsowania JSON od AI", raw: resultText });
     }
-    res.json({ result: filesResult });
+    res.json({ result: resultObj });
   } catch (err) {
     res.status(500).json({ error: "Coś poszło nie tak", details: err.message });
   }
